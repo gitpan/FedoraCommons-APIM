@@ -2,7 +2,7 @@
 
 # t/001_load.t - check module loading and create testing directory
 
-use Test::More tests => 13;
+use Test::More tests => 17;
 use SOAP::Lite;
 use MIME::Base64;
 use POSIX;
@@ -14,7 +14,7 @@ my $port = $ENV{FEDORA_PORT} || "";
 my $user = $ENV{FEDORA_USER} || "";
 my $pwd  = $ENV{FEDORA_PWD} || "";
 
-my $skip_deletions = 1;
+my $skip_deletions = 0;
 my @temp_files = ();
 
 
@@ -28,7 +28,7 @@ if (! $host || ! $port || ! $user || ! $pwd) {
     BAIL_OUT ("$msg");
 } 
 
-diag ("Host: $host Port: $port User: $user Pwd: $pwd\n");
+diag ("Host: $host Port: $port User: $user Pwd: XXXX\n");
 
 my $timeout = 100;
 
@@ -75,6 +75,8 @@ $error = $apim->error() || "";
 #4
 ok ($result == 0, "Fedora createObject() FAILED: $error");
 
+if ($result == 0) { diag ("createObject() OK");}
+
 my $pid2 = "CPAN:TestObject2";
 
 SKIP: {
@@ -86,7 +88,7 @@ SKIP: {
     open my $fh, ">", $testFile;
     if (defined $fh) {
 	binmode $fh, ":utf8";
-	print $fh $testFile;
+	print $fh $data;
 	close $fh;
     }
     push @temp_files, $testFile;
@@ -106,9 +108,32 @@ SKIP: {
 					  timestamp_ref => \$ts,
 					  );
     $error = $apim->error() || "";
-    diag ("uploadNewDatastream timestamp: $ts");
+    if ($result == 0) {
+	diag ("uploadNewDatastream (addDatastream) OK");
+    }
     # A
     ok ($result == 0, "Fedora uploadNewDatastream() FAILED: $error");
+
+    # Upload second datastream (should get timestamp this time)
+    $mime = "text/xml";
+    $dsID = "TEST_DATASTREAM";
+    $dsLabel = "Test Datastream";
+    $ts = "";
+    $result = $apim->uploadNewDatastream( pid => $pid,
+					  dsID => $dsID,
+					  filename => $testFile,
+					  MIMEType => $mime,
+					  dsid_ref => \$dsid,
+					  timestamp_ref => \$ts,
+					  );
+    $error = $apim->error() || "";
+    if ($result == 0) {
+	diag ("uploadNewDatastream (modifyDatastreamByReference) OK ");
+    }
+    # A
+    ok ($result == 0, "Fedora uploadNewDatastream() FAILED: $error");
+
+
 
     # Test compareDatastreamChecksum
     #     Relies on test object
@@ -125,7 +150,9 @@ SKIP: {
     # B
     ok ($result == 0, "Fedora compareDatastreamChecksum() FAILED: $error");
 
-    diag ("Checksum: $checksum_result");
+    if ($result == 0) {
+	diag ("compareDatastreamChecksum(): OK");
+    }
 
     # Test getDatastream
     #     Relies on test object
@@ -139,7 +166,9 @@ SKIP: {
     # C
     ok ($result == 0, "Fedora getDatastream() FAILED: $error");
 
-    diag ("Datastream: $stream");
+    if ($result == 0) {
+	diag ("getDatastream() OK");
+    }
 
     # Test addRelationship 
     #     Relies on test object
@@ -151,9 +180,13 @@ SKIP: {
 				      isLiteral => 'false',
 				      datatype => "",
 				      );
-
+    $error = $apim->error() || "";
     # D
     ok ($result == 0, "Fedora addRelationship() FAILED: $error");
+
+    if ($result == 0) {
+	diag ("addRelationship() OK");
+    }
 
     # Test purgeDatastream
     #     Relies on test object
@@ -170,9 +203,13 @@ SKIP: {
 	   logMessage => "Test of purgeDatastream()",
 	   timestamp_ref => \$ts,
 	   );
-
+      $error = $apim->error() || "";
       # E
       ok ($result == 0, "Fedora purgeDatastream() FAILED: $error");
+
+      if ($result == 0) {
+	  diag ("purgeDatastream() OK");
+      }
   }
     # Test purgeRelationship
     #     Relies on test object
@@ -187,9 +224,13 @@ SKIP: {
 					  datatype => "",
 					  result => \$return,
 					  );
-      
+      $error = $apim->error() || "";
       # F
       ok ($result == 0, "Fedora purgeRelationship() FAILED: $error");
+
+      if ($result == 0) {
+	  diag ("purgeRelationship() OK");
+      }
   }
 
     # Test purgeObject - clear out test objects
@@ -204,15 +245,57 @@ SKIP: {
 				    force => "",
 				    timestamp_ref => \$timestamp_ref,
 				    );
-
+      $error = $apim->error() || "";
       # G
       ok ($result == 0, "Fedora purgeObject FAILED: $error");
+
+      if ($result == 0) {
+	  diag ("purgeObject() OK");
+      }
   }
 }
 
 # Tests that do not require test object
 
 # Test getNextPID - standalone
+my @pids = ();
+$result =  $apim->getNextPID (numPids      => 1,
+			      pidNamespace => "TestA",
+			      ##                    pidlist_ref  => \@pids,
+			      pidlist_ref  => \@pids,
+			      );
+$error = $apim->error() || "";
+#5
+ok ($result == 0, "Fedora getNextPID(numPids => 1) FAILED: $error");
+$count = $#pids + 1;
+#6
+ok ($count == 1, "Fedora getNextPID(numPids => 1) FAILED: $error");
+
+if ($result == 0 && $count == 1) {
+    diag ("getNextPID(numPids => 1) OK");
+}
+
+@pids = ();
+$result =  $apim->getNextPID (numPids      => 10,
+			      pidNamespace => "TestB",
+			      ##                    pidlist_ref  => \@pids,
+			      pidlist_ref  => \@pids,
+			      );
+$error = $apim->error() || "";
+#7
+ok ($result == 0, "Fedora getNextPID(numPids => 10) FAILED: $error");
+
+#8
+$count = $#pids + 1;
+ok ($count == 10, "Fedora getNextPID(numPids => 10) FAILED: $error");
+
+if ($result == 0 && $count == 10) {
+    diag ("getNextPID(numPids => 10) OK");
+}
+
+1;
 
 
-ok ($result == 0, "Fedora getNextPID() FAILED: $error");
+
+
+

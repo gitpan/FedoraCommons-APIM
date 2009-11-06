@@ -1,5 +1,8 @@
 Revision history for Perl module FedoraCommons::APIM
 
+0.02 Fri Nov  6 14:47:38 EST 2009
+    - minor documentation changes
+
 0.01 Fri Oct 23 13:02:51 2009
     - original version; created by ExtUtils::ModuleMaker 0.51
 

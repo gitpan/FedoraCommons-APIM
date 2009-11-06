@@ -104,7 +104,7 @@ our @EXPORT = qw(
 
 );
 
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 
 
 our $FEDORA_VERSION = "3.2";
@@ -1371,8 +1371,7 @@ sub addRelationship {
   my $self = shift;
   my %args = @_;
 
-  $self->{ERROR_MESSAGE}=undef;
-  $self->{TIME}=undef;
+  $self->{ERROR_MESSAGE}=undef;  $self->{TIME}=undef;
 
   Carp::croak "Parameter 'pid' missing" unless defined($args{pid});
   Carp::croak "Parameter 'relationship' missing" unless defined($args{relationship});
@@ -2031,7 +2030,7 @@ are normally used together in client code into a single method.
 
 =item createObject()
 
-This method takes care of creating the FOXML and the new object [normally two APIA steps].
+This method takes care of creating the FOXML and the new object [normally two APIM steps].
 
 Creating an object requires FOXML for the object you are creating.
 You must install the default ingest template (available) in the 
@@ -2050,7 +2049,7 @@ Typical createObject() method call:
       XML_file=> "./ingesttemplate.xml", 
       params => { pid_in => $idno,
                   title_in => "$title",
-                  collection_in => "DXLS:Math"},
+                  collection_in => "$collection"},
       pid_ref =>\$pid 
     );
 
@@ -2059,7 +2058,7 @@ To use default ingest template:
     $apim->createObject (
       params => { pid_in => $idno,
                   title_in => "$title",
-                  collection_in => "DXLS:Math"},
+                  collection_in => "$collection"},
       pid_ref =>\$pid 
 
 To specify FOXML template that's already stored in memory:
@@ -2068,7 +2067,7 @@ To specify FOXML template that's already stored in memory:
       XML_ref => "$foxml",
       params => { pid_in => $idno,
                   title_in => "$title",
-                  collection_in => "DXLS:Math"},
+                  collection_in => "$collection"},
       pid_ref =>\$pid 
 
 =item uploadNewDatastream()
@@ -2180,7 +2179,7 @@ parameters to the wrapping method.
 Fedora documentation: L<http://fedora-commons.org/confluence/display/FCR30/Fedora+Repository+3.2.1+Documentation>.
 
 Fedora API-M documentation:
-L<http://www.fedora.info/definitions/1/0/api/Fedora-API-M.html>.
+L<http://www.fedora-commons.org/confluence/display/FCR30/API-M>.
 
 =head1 AUTHOR
 

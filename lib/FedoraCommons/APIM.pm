@@ -104,7 +104,7 @@ our @EXPORT = qw(
 
 );
 
-our $VERSION = '0.2';
+our $VERSION = '0.2.1';
 
 
 our $FEDORA_VERSION = "3.2";
@@ -393,12 +393,9 @@ sub createObject {
   my ($foxml_ref, $foxml_template_file, $pid);
   my (@temp_files) = ();
 
-  print "DELETE print below:\n";
-
   # Use in-line FOXML when defaul FOXML file is not present.
   if (! $args{XML_ref} && ($args{XML_file} && ! -s $args{XML_file})) {
     $args{XML_ref} = \$default_foxml;
-    print "Using default in-line FOXML\n";
   }
 
   if ($args{XML_ref}) {

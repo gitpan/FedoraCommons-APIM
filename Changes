@@ -1,9 +1,15 @@
 Revision history for Perl module FedoraCommons::APIM
 
-0.02 Fri Nov  6 14:47:38 EST 2009
-    - minor documentation changes
+0.2.1 Fri Nov 13 11:24:33 EST 2009
+      - set tests to succeed (skip all) if the Fedora server environment
+	variables are not set. Preferred to failing CPAN install.
+      - removed minor debugging statement holdover
 
-0.01 Fri Oct 23 13:02:51 2009
-    - original version; created by ExtUtils::ModuleMaker 0.51
+0.02  Fri Nov  6 14:47:38 EST 2009
+      - minor documentation changes
+      - added additional tests
+
+0.01  Fri Oct 23 13:02:51 2009
+      - original version; created by ExtUtils::ModuleMaker 0.51
 
 

@@ -104,7 +104,7 @@ our @EXPORT = qw(
 
 );
 
-our $VERSION = '0.2.1';
+our $VERSION = '0.2.2';
 
 
 our $FEDORA_VERSION = "3.2";
@@ -336,6 +336,7 @@ sub ingest {
 
   } elsif ($ingest_result->fault && $self->{reload} && 
 	   $ingest_result->faultstring =~/already exists in the registry/) {
+    #
     $ingest_result->faultstring =~/The PID \'([^\']*)\' already/;
     ${$args{pid_ref}} = $1;
     if ($self->{debug}) {
@@ -428,7 +429,6 @@ sub createObject {
 
     if (! defined $template) {
       my $mes = "Failed to instantiate Fedora template.";
-#      print "SUB: Error: $mes\n";
       $self->{ERROR_MESSAGE} = "Failed to create FOXML template instance.";
       return 1;
     }
@@ -445,7 +445,6 @@ sub createObject {
       }
 
       foreach my $param (keys %params) {
-#	print "SUB: Perform template substitution: $param / $params{$param}\n";
 	$template->param($param => $params{$param});
       }
 
@@ -634,25 +633,11 @@ sub getNextPID {
 
   my @pids = $getnextpid_result->paramsout();
 
-#  print " PID: $result_ref\n";
   foreach my $p (@pids) {
-##    print "PIDs: $p\n";
     push @{$args{pidlist_ref}}, $p;
   }
 
-#  @pids = @{$getnextpid_result->result()};
-#  foreach my $p (@pids) {
-#    print "##PIDs: $p\n";
-#    push @pids, $p;
-##    push @{$args{pidlist_ref}}, $p;
-#  }
-
-#  $args{pidlist_ref} = \@pids;
-
-  # Handle success
-#  map { push @{$args{pidlist_ref}}, $_; } @{$result_ref};
   return 0;
-
 }
 
 
@@ -739,7 +724,6 @@ sub addDatastream {
   # Since many datastreams were added with the versionable flag set to
   # false we must change this using the setDatastreamVersionable APIM
   # request to make this active
-#  print "Set Datastream Versionable.\n";
   my $ts;
   if ($self->setDatastreamVersionable
       ( pid => $args{pid},
@@ -915,7 +899,6 @@ sub uploadNewDatastream {
 			      logMessage => $args{logMessage},
 			      dsid_ref => \$dsid ) == 0) {
 
-#      print "Added Datastream: $dsid to object: $args{pid}\n";
       ${$args{dsid_ref}} = $dsid;
       return 0;
     } else {
@@ -1334,7 +1317,6 @@ sub compareDatastreamChecksum {
       $compareChecksum_result->faultcode."; ".
 	$compareChecksum_result->faultstring."; ".
 	  $compareChecksum_result->faultdetail;
-    print "Checksum ERROR Result: $self->{ERROR_MESSAGE}\n";
     return 2;
   }
 
@@ -1343,7 +1325,6 @@ sub compareDatastreamChecksum {
   ${$args{checksum_result}} = $result_ref;
 
   if ($result_ref =~ /Checksum validation error/) {
-    print "Error: $result_ref\n";
     return 3;
   }
   return 0;
@@ -1389,9 +1370,7 @@ sub addRelationship {
       $args{pid},
       $args{relationship},
       $args{object},
-##      $args{isLiteral},
       SOAP::Data->value($args{isLiteral})->type('xsd:boolean'),
-#      SOAP::Data->value($args{versionable})->type('xsd:boolean'),
       $args{datatype},
     );
     my $elapse_time = time - $start;
@@ -1417,7 +1396,7 @@ sub addRelationship {
   ${$args{result}} = $arel_result->result();
 
   if ( $arel_result->result() eq 'false') {
-    # Assume that the relation exists already. IF we are supporting
+    # Assume that the relation exists already. If we are supporting
     # reloads then we must deal with this error even if it indicates 
     # that the relation already exists.
     if ($self->{reload}) {
@@ -1432,13 +1411,44 @@ sub addRelationship {
 				    datatype => $args{datatype},
 				    result => \$result,
 				  ) == 0) {
-	print "X-Purge Relation Successfully: $result\n";
       } else {
-	print "X-Purge Relationship failed: " . $self->error() . "\n";
+	my $msg = $self->{ERROR_MESSAGE} || "";
+	$self->{ERROR_MESSAGE}="purgeRelationship failed:" . $msg;
+	return 2;
       }
-      return 0;
-    } else {
-      $self->{ERROR_MESSAGE}="addRelationship failed (may exist already).";
+      # Now add the relationship
+      my $arel_result;
+      eval {
+	my $start=time;
+	$arel_result = $self->{apim}->addRelationship
+	  (
+	   $args{pid},
+	   $args{relationship},
+	   $args{object},
+	   SOAP::Data->value($args{isLiteral})->type('xsd:boolean'),
+	   $args{datatype},
+	  );
+	my $elapse_time = time - $start;
+	$self->{TIME} = $elapse_time;
+	$self->{STAT}->{'addRelation'}{count}++;
+	$self->{STAT}->{'addRelation'}{time} += $elapse_time;
+      };
+      if ($@) {
+	$self->{ERROR_MESSAGE}=$self->_handle_exceptions($@);
+	return 1; 
+      }
+      if ($arel_result->result() eq 'false') {
+	return 2;
+      } else {
+	return 0;
+      }
+    } else { # AddRelationship failed and Reload flag not set
+      my $msg = $self->{ERROR_MESSAGE} || "";
+      $msg = $arel_result->faultcode."; ".
+	$arel_result->faultstring."; ".
+	  $arel_result->faultdetail;
+      $self->{ERROR_MESSAGE}="addRelationship failed (may exist already):"
+	. $msg;
       return 2;
     }
     return 2;
@@ -1497,7 +1507,7 @@ sub getRelationships {
 
   # Handle success
   ${$args{result_ref}} = $grel_result->result();
-print "RESULT:\n" . $grel_result->result() . "\n";
+
   return 0;
 }
 

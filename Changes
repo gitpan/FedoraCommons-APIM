@@ -2,6 +2,7 @@ Revision history for Perl module FedoraCommons::APIM
 
 0.2.2 Mon Dec 21 12:06:33 EST 2009
       - addRelationship method bug fix.
+      - eliminated some extraneous debugging messages.
 
 0.2.1 Fri Nov 13 11:24:33 EST 2009
       - set tests to succeed (skip all) if the Fedora server environment

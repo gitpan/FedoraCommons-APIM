@@ -104,7 +104,7 @@ our @EXPORT = qw(
 
 );
 
-our $VERSION = '0.3';
+our $VERSION = '0.4';
 
 
 our $FEDORA_VERSION = "3.2";
@@ -256,7 +256,8 @@ sub uploadFile {
                               Content => [ file => [$args{filename}] ] );
 
     if (! $result->is_success) {
-	return 2;
+##      $self->{ERROR_MESSAGE} = $result->content;
+      return 2;
     }
 
     ${$args{file_ref}} = $result->content;
@@ -330,6 +331,16 @@ sub ingest {
 	  print "APIM: Ingested New Monograph Object(2): $1\n\n";
 	}
 	return 0;
+      } else {
+	if ($self->{debug}) {
+	  print "APIM: Ingest: Object exists: Purge: re-Ingest FAILED: " .
+	    $self->{ERROR_MESSAGE} . "\n";
+	}
+      }
+    } else {
+      if ($self->{debug}) {
+	print "APIM: Ingest: Object exists: Purge FAILED: " .
+	  $self->{ERROR_MESSAGE} . "\n";
       }
     }
 
@@ -939,9 +950,11 @@ sub uploadNewDatastream {
 	  return 0;
 	} else {
 	  # An error occurred in trying to modify datastream
+	  $self->{ERROR_MESSAGE} = $self->{ERROR_MESSAGE} 
+	    . "Failed to modify datastream.";
 	  return 1;
 	}
-      }
+      } # end datastream exists code
 
       # Rely on addDatastream to set error string
       return 1;
@@ -950,6 +963,8 @@ sub uploadNewDatastream {
   } else {
     # Failed to upload file
     # Rely on uploadFile to set error string.
+    $self->{ERROR_MESSAGE} = $self->{ERROR_MESSAGE} 
+      . "Failed to upload datastream file.";
     return 1;
   }
 }
@@ -1444,9 +1459,7 @@ sub addRelationship {
       }
     } else { # AddRelationship failed and Reload flag not set
       my $msg = $self->{ERROR_MESSAGE} || "";
-      $msg = $arel_result->faultcode."; ".
-	$arel_result->faultstring."; ".
-	  $arel_result->faultdetail;
+
       $self->{ERROR_MESSAGE}="addRelationship failed (may exist already):"
 	. $msg;
       return 2;
@@ -1482,9 +1495,10 @@ sub getRelationships {
   my $grel_result;
   eval {
     my $start=time;
-    $grel_result = $self->{apim}->getRelationships (
-      $args{pid},
-      $args{relationship},
+    $grel_result = $self->{apim}->getRelationships 
+      (
+       $args{pid},
+       "$args{relationship}",
     );
     my $elapse_time = time - $start;
     $self->{TIME} = $elapse_time;

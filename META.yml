@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               FedoraCommons-APIM
-version:            0.3
+version:            0.4
 abstract:           Implements Fedora Commons Repository APIM api interface.
 author:
     - David L. Fielding (dlf2@cornell.edu)

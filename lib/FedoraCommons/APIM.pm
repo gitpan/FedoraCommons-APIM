@@ -4,6 +4,7 @@
 #
 # ========================================================================= # 
 #
+#  Copyright (c) 2010, Cornell University www.cornell.edu (enhancements)
 #  Copyright (c) 2009, Cornell University www.cornell.edu (enhancements)
 #  Copyright (c) 2007, The Pennsylvania State University, www.psu.edu 
 #  Copyright (c) 2006, Technical Knowledge Center of Denmark, www.dtv.dk
@@ -53,10 +54,21 @@
 #          o getNextPID                    Supported      Fixed??   Yes
 #          o getObjectXML
 #          o ingest                        Supported      OK        Yes (PSU)
-#
+#    * Miscellaneous Methods
 #          o uploadFile (APIM-Lite api)                   OK        Yes (PSU)
+#    * Non-API Methods
 #          o createObject (not part of API)               New       Yes  (C)
 #          o uploadNewDatastream (not part of API)        New       Yes  (C)
+#
+# Allow client to automatically set POLICY datastream 
+# each time a new object is created. (*C)
+#
+#          o set_policy_url
+#          o get_policy_url
+#          o set_policy_path
+#          o get_policy_path
+#          o set_policy_label
+#          o get_policy_label
 #
 # Enhancements/Additions:
 # *PSU - Implemented by Penn State University
@@ -104,7 +116,7 @@ our @EXPORT = qw(
 
 );
 
-our $VERSION = '0.4';
+our $VERSION = '0.5';
 
 
 our $FEDORA_VERSION = "3.2";
@@ -173,6 +185,14 @@ sub new {
       $self->{$k} = $args{$k}; 
     } elsif ( $k eq 'debug') {
       $self->{$k} = $args{$k}; 
+    } elsif ( $k eq 'policy_url') {
+      $self->{$k} = $args{$k}; 
+      $self->{'policy_path'} = "";# ensure only one is set
+    } elsif ( $k eq 'policy_path') {
+      $self->{$k} = $args{$k}; 
+      $self->{'policy_url'} = ""; # ensure only one is set
+    } elsif ( $k eq 'policy_label') {
+      $self->{$k} = $args{$k}; 
     }
   }
 
@@ -184,7 +204,7 @@ sub new {
 
   # Bless object
   bless $self;
-  
+
   # Initialise SOAP class
   my $apim=SOAP::Lite
       -> uri('http://www.fedora.info/definitions/api/')
@@ -193,6 +213,7 @@ sub new {
     $apim->proxy->timeout($self->{timeout});
   }
   $self->{apim} = $apim;
+  $self->{ERROR_MESSAGE} = "";
 
   return $self;
 }
@@ -224,6 +245,39 @@ sub start_stat {
 
 sub get_default_foxml {
   return $default_foxml;
+}
+
+sub set_policy_url {
+  my $self = shift;
+  my $url  = shift;
+  $self->{'policy_url'} = $url;
+  $self->{'policy_path'} = ""; # Allow only one of url/path to be set
+  return 1;
+}
+sub get_policy_url {
+  my $self = shift;
+  return $self->{'policy_url'};
+}
+sub set_policy_path {
+  my $self = shift;
+  my $url  = shift;
+  $self->{'policy_path'} = $url;
+  $self->{'policy_url'} = ""; # Allow only one of url/path to be set
+  return 1;
+}
+sub get_policy_path {
+  my $self = shift;
+  return $self->{'policy_path'};
+}
+sub set_policy_label {
+  my $self  = shift;
+  my $label = shift;
+  $self->{'policy_label'} = $label;
+  return 1;
+}
+sub get_policy_label {
+  my $self  = shift;
+  return $self->{'policy_label'};
 }
 
 # uploadFile 
@@ -376,12 +430,20 @@ sub ingest {
 # Create a simple Fedora object [empty]
 #
 # Args in parameter hash:
-#   XML_ref:     Reference to variable holding the foxml record to be ingested.
-#   XML_file:    Reference to foxml path to be munged and ingested
-#   params:      Hash reference containing parameters to substitute into 
-#                FOXML template. [Use when file
-#   logMessage:  Optional log message
-#   pid_ref:     Reference to scalar to hold resulting pid
+#   XML_ref:       Reference to variable holding the foxml record to be 
+#                  ingested.
+#   XML_file:      Reference to foxml path to be munged and ingested
+#   params:        Hash reference containing parameters to substitute into 
+#                  FOXML template. [Use when file
+#   policy_params: Hash reference containing parameters for adding policy
+#                  datastream to newly created object. POLICY Datastream 
+#                  is set according to the arguments you provide.
+#                  Datastream label is optional (policy_label).
+#                  Client must provide URL that resolves to the 
+#                  policy (policy_url) or a path to the policy in 
+#                  the filesystem (policy_path).
+#   logMessage:    Optional log message
+#   pid_ref:       Reference to scalar to hold resulting pid
 #
 # Return:
 #
@@ -481,6 +543,7 @@ sub createObject {
     }
   } # end template processing
 
+  # Proceed if we have successfully created the FOXML
   if ($foxml_ref) {
 
     my $logMessage = $args{logMessage} || "Create New Object";
@@ -493,6 +556,102 @@ sub createObject {
 	print "SUB: Ingested New Monograph Object: $pid\n\n";
       }
 
+      # Finished creating new object. Now deal with adding policy
+      # datastream (if specified)
+
+      # Support setting simple external policy link
+      my %policy_params = ();
+
+      my ($path, $url, $label, $cg, $filename);
+      $path = "";
+      $url = "";
+
+      # Give arguments to method precidence over instance settings
+      if (defined $args{policy_params}) {
+	%policy_params = %{$args{policy_params}};
+
+	$path  = $policy_params{'policy_path'};
+	$url   = $policy_params{'policy_url'};
+	$label = $policy_params{'policy_label'};
+      } elsif ($self->{'policy_path'} || $self->{'policy_url'}) {
+	$path  = $self->{'policy_path'};
+	$url   = $self->{'policy_url'};
+	$label = $self->{'policy_label'};
+      }
+
+      # Can't have both set - return error
+      if ($path && $url) {
+	if ($self->{debug}) {
+	  print "ERROR adding POLICY Datastream FAILED: Set one of \n"
+	    . "policy_url or policy_path, not both."
+	      . "Object ID: $pid\n";
+	}
+	$self->{ERROR_MESSAGE} = "Bad policy arguments. Set only one of ."
+	  . "policy_url or policy_path";
+	return 1;
+      }
+
+      # Make sure file exists
+      if ($path && ! -s $path) {
+	$self->{ERROR_MESSAGE} = "ERROR: Bad policy path: $path"
+	  . " File does not exist.";
+	return 1;
+      }
+
+      # For path we must upload the XACML file first and set url to file ref.
+      # For url (external reference, we are all set)
+      if ($path && -s $path) {
+	$filename = $path;
+	if (! $label) { $label = "Policy Datastream";}
+	$cg = 'M';
+      } elsif ($url) {
+	if (! $label) { $label = "External Policy Datastream Reference";}
+	$cg = 'E';
+      }
+
+      # Add policy datastream - this is a new object so we shouldn't need
+      # to worry about existing policy 
+      if (defined $url && $url) {
+	if ($self->{debug}) {
+	  print "*** Adding POLICY datastream to object $pid.\n";
+	}
+	my $dsID = "POLICY";
+	my $altids = '';
+	my $v = 'true';
+	my $mime = "text/plain";
+	my $uri = '';
+	my $state = 'A';
+	my $msg    = "Adding policy to new object.";
+	my ($dsid, $ts);
+
+	if ($self->uploadNewDatastream ( pid => $pid,
+					 dsID => $dsID,
+					 altIDs => $altids,
+					 dsLabel => $label,
+					 versionable => $v,
+					 filename => $filename,
+					 MIMEType => $mime,
+					 formatURI => $uri,
+					 dsLocation => $url,
+					 controlGroup => $cg,
+					 dsState => $state,
+					 logMessage => $msg,
+					 dsid_ref => \$dsid,
+					 timestamp_ref => \$ts, ) == 0) {
+	  if ($self->{debug}) {
+	    print "Added POLICY Datastream Reference: $dsid to object: $pid\n";
+	  }
+	} else {
+	  my $error = $self->error();
+	  if ($self->{debug}) {
+	    print "Adding POLICY Datastream Reference FAILED: "
+	      . "$dsID to object: $pid\n$error\n";
+	  }
+	  $self->{ERROR_MESSAGE} = "Failed to add POLICY datastream. $error";
+	  return 1;
+	}
+      } # if policy parameters
+
     } else {
       if ($self->{debug}) {
 	print "SUB: ERROR: Injesting NEW object FAILED: " 
@@ -502,6 +661,7 @@ sub createObject {
       $self->{ERROR_MESSAGE} =  $self->{ERROR_MESSAGE} . 
 	"ERROR: Injesting NEW object FAILED: " 
 	  . $self->{apim}->error();
+
       return 1;
     }
   } else {
@@ -833,6 +993,13 @@ sub addDatastream {
 #   1 = Error
 #   2 = Error on remote server
 #
+# Notes:
+#   This routine has been modified to add external reference datastreams
+# as POLICY datastreams to objects. The 'filename' argument
+# is no longer 'require' to allow external reference to be passed in the
+# argument 'dsLocation'. 'dsLocation' may contain external link of reference
+# to uploaded file.
+#
 sub uploadNewDatastream {
   my $self = shift;
   my %args = @_;
@@ -841,8 +1008,13 @@ sub uploadNewDatastream {
   $self->{TIME}=undef;
 
   # Check for required arguments
-  if (! defined $args{filename}) {
-    $self->{ERROR_MESSAGE} = "Parameter 'filename' missing.";
+  if (! defined $args{filename} && ! defined $args{dsLocation} ) {
+    $self->{ERROR_MESSAGE} = "Parameter 'filename' or 'dsLocation' missing.";
+    return 1;
+  }
+  if (defined $args{filename} && defined $args{dsLocation} ) {
+    $self->{ERROR_MESSAGE} = "Invalid arguments: Specify only ONE of "
+      ."either 'filename' or 'dsLocation'.";
     return 1;
   }
   if (! defined $args{MIMEType}) {
@@ -881,18 +1053,31 @@ sub uploadNewDatastream {
 
   # Do we need to set other arguments to null?
 
-  # Now upload datastream
-  my ($file_ref, $dsid);
-  if ($self->uploadFile(
-                        filename => $args{filename},
-                        file_ref => \$file_ref
-		       ) == 0 ) {
+  # Now upload datastream or reference
+  # Support uploading filename and external reference (URL)
+  #
+  my ($file_ref, $dsid, $url, $uri);
+  $uri = '';
+  $url = "";
 
+  if ($args{filename} && -s $args{filename} 
+      && $self->uploadFile(
+			   filename => $args{filename},
+			   file_ref => \$file_ref
+			  ) == 0 ) {
     # mesage file_ref
-    my $uri = '';
-    my $url = $file_ref;
-    # Remove trailing spaces
-    $url =~ s/\s+$//;
+    $url = $file_ref;
+  } elsif ($args{dsLocation}) {
+    # This value is either an external link or a reference to
+    # a file that has been already uploaded via the uploadFile
+    # method. These are both valid values for the argument dsLocation.
+    $url = $args{dsLocation};
+  }
+
+  # Remove trailing spaces
+  $url =~ s/\s+$//;
+
+  if ($url) {
 
     # Add datastream to object
     if ($self->addDatastream( pid => $args{pid},
@@ -950,7 +1135,7 @@ sub uploadNewDatastream {
 	  return 0;
 	} else {
 	  # An error occurred in trying to modify datastream
-	  $self->{ERROR_MESSAGE} = $self->{ERROR_MESSAGE} 
+	  $self->{ERROR_MESSAGE} = ($self->{ERROR_MESSAGE} || "")
 	    . "Failed to modify datastream.";
 	  return 1;
 	}
@@ -960,10 +1145,10 @@ sub uploadNewDatastream {
       return 1;
     }
 
-  } else {
+  } else { # $url was not set properly, failed to upload or specify link
     # Failed to upload file
     # Rely on uploadFile to set error string.
-    $self->{ERROR_MESSAGE} = $self->{ERROR_MESSAGE} 
+    $self->{ERROR_MESSAGE} = ($self->{ERROR_MESSAGE} || "")
       . "Failed to upload datastream file.";
     return 1;
   }
@@ -1470,7 +1655,7 @@ sub addRelationship {
   return 0;
 }
 
-# getRelationships
+# getRelationships [DOES NOT WORK - FEDORA SERVER RETURNS INTERNAL ERROR]
 #
 # Args in parameter hash:
 #   pid:           PID of the object
@@ -2061,8 +2246,17 @@ a path to the method as an argument.
 The params are values in the FOXML template that will be substitutes
 before being ingested. You may create your own FOXML template and supply
 the appropriate values to be substituted. The current default template
-accepts the values: pid_in, title_in, and collection_in.
+accepts the values: pid_in, title_in, owner_in, and collection_in.
 
+Support has been added to set the POLICY datastream for an object within
+the createObject() method. This eliminates the need to execute addDatastream()
+to add a POLICY after you create an object with createObject(). This operation
+will happen automatically when you set the APIM instance policy_url or
+policy_path using the
+set_policy_url() [external reference] or set_policy_path() [managed]. 
+You may also set the policy label with set_policy_label(). When either
+policy_url or policy_path are set all objects will have the POLICY 
+datastream added to the object. See policy methods below.
 
 Typical createObject() method call:
 
@@ -2070,6 +2264,7 @@ Typical createObject() method call:
       XML_file=> "./ingesttemplate.xml", 
       params => { pid_in => $idno,
                   title_in => "$title",
+                  owner_in => "$owner",
                   collection_in => "$collection"},
       pid_ref =>\$pid 
     );
@@ -2140,6 +2335,48 @@ Typical call looks like:
 
 
 =back
+
+=head2 policy methods
+
+These methods directly impact the createObject() method. These methods
+are intended for cases where
+you would like to store a common XACML policy for the objects created
+by your script. You set these policy_*() methods once instead of calling
+createObject() followed by addDatastream() to add the POLICY datastream.
+Once set the createObject() method adds the POLICY datastream you specified.
+
+Set either set_policy_url() or set_policy_path() not both. Setting one of
+these will remove the other setting to avoid potential conflicts.
+
+=over 3
+
+=item set_policy_url()
+
+Set the policy URL for the APIM instance. This will create an external
+reference POLICY datastream.
+
+=item get_policy_url()
+
+Returned the policy URL.
+
+=item set_policy_path()
+
+Set path to an XACML policy file to be loaded into each new object.
+
+=item get_policy_path()
+
+Return the policy path.
+
+=item set_policy_label()
+
+Set the POLICY datastream label.
+
+=item get_policy_label()
+
+Return the POLICY datastream label.
+
+=back
+
 
 =head2 Other methods
 

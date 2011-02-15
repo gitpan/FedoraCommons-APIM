@@ -4,6 +4,7 @@
 #
 # ========================================================================= # 
 #
+#  Copyright (c) 2011, Cornell University www.cornell.edu (enhancements)
 #  Copyright (c) 2010, Cornell University www.cornell.edu (enhancements)
 #  Copyright (c) 2009, Cornell University www.cornell.edu (enhancements)
 #  Copyright (c) 2007, The Pennsylvania State University, www.psu.edu 
@@ -116,7 +117,7 @@ our @EXPORT = qw(
 
 );
 
-our $VERSION = '0.5';
+our $VERSION = '0.6';
 
 
 our $FEDORA_VERSION = "3.2";
@@ -168,6 +169,9 @@ sub new {
   my $class = shift;
   my %args = @_;
   my $self = {};
+
+  $self->{'protocol'} = "http";
+
   foreach my $k (keys %args) {
     if ($k eq 'usr') {
       $self->{$k} = $args{$k}; 
@@ -193,6 +197,8 @@ sub new {
       $self->{'policy_url'} = ""; # ensure only one is set
     } elsif ( $k eq 'policy_label') {
       $self->{$k} = $args{$k}; 
+    } elsif ($k eq 'protocol') {
+      $self->{$k} = $args{$k};
     }
   }
 
@@ -1060,14 +1066,23 @@ sub uploadNewDatastream {
   $uri = '';
   $url = "";
 
-  if ($args{filename} && -s $args{filename} 
-      && $self->uploadFile(
+  if ($args{filename} && -s $args{filename}) {
+    if ($self->uploadFile(
 			   filename => $args{filename},
 			   file_ref => \$file_ref
 			  ) == 0 ) {
-    # mesage file_ref
-    $url = $file_ref;
-  } elsif ($args{dsLocation}) {
+      # mesage file_ref
+      $url = $file_ref;
+    } else {
+      if ($self->error()) {
+	print "ERROR: " . $self->error() . "'$file_ref'\n";
+      } else {
+	print "ERROR: Unknown error uploadFile().\n";
+      }
+    }
+  }
+
+  if ($args{dsLocation}) {
     # This value is either an external link or a reference to
     # a file that has been already uploaded via the uploadFile
     # method. These are both valid values for the argument dsLocation.
@@ -1801,7 +1816,7 @@ sub _handle_exceptions {
 # Method for constructing proxy URL
 sub _get_proxy {
   my ($self) = @_;
-  return "http://".
+  return "$self->{'protocol'}://".
            $self->{usr}.":".$self->{pwd}.
            "\@".$self->{host}.":".$self->{port}.
            "/fedora/services/management";
@@ -1947,6 +1962,7 @@ L<http://www.fedora.info/definitions/1/0/api/Fedora-API-M.html>.
 Constructor.  Called as 
 
     my $apim = new Fedora::APIM(
+      protocol => "https",        # Enables SSL protocol
       host    => "hostname",      # Required. Host name of 
                                   #   fedora installation
       port    => "8080",          # Required. Port number of 
